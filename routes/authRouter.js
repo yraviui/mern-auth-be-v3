@@ -1,5 +1,5 @@
 import express from 'express';
-import { registerController, loginController, verifyEmailController, resetPasswordController, refreshTokenController, forgotPasswordController } from '../controllers/authController.js';
+import { registerController, loginController, verifyEmailController, resetPasswordController, refreshTokenController, forgotPasswordController, resendOTPController, allUsersController, getAllUsersWithPatients } from '../controllers/authController.js';
 import { isAdmin, isCustomerCare, isRequiredAuth } from '../middleware/authMiddlewares.js';
 
 const router = express.Router();
@@ -10,6 +10,10 @@ router.post('/login', loginController);
 router.post('/forgot-password', forgotPasswordController);
 router.post('/reset-password', resetPasswordController);
 router.post('/refresh-token', refreshTokenController);
+router.post('/resend-otp', resendOTPController);
+
+router.get('/all-users',  isRequiredAuth, isAdmin, allUsersController)
+router.get('/all-users-with-patients',  isRequiredAuth, isAdmin, getAllUsersWithPatients )
 
 router.get('/user-auth', isRequiredAuth, (req, res) => {
     res.send({ ok: true });

@@ -3,6 +3,7 @@ import UserModel from "../models/users.js";
 import crypto from 'crypto'; // Move to top
 import transporter from "../utils/mailer.js";
 import JWT from 'jsonwebtoken';
+import PatientModel from "../models/patients.js";
 
 // Helper for hashing OTP
 const hashOtp = (otp) => crypto.createHash('sha256').update(otp).digest('hex');
@@ -327,3 +328,123 @@ export const refreshTokenController = async (req, res) => {
     });
   }
 };
+
+
+export const resendOTPController = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    const user = await UserModel.findOne({
+      email: email.toLowerCase(),
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (user.emailOtpVerified) {
+      return res.status(400).json({
+        success: false,
+        message: "Email already verified",
+      });
+    }
+
+    // 🔥 Generate OTP
+    const otp = crypto.randomInt(100000, 999999).toString();
+
+    // 🔥 Hash OTP (MUST match verify controller)
+    const hashedOtp = crypto
+      .createHash("sha256")
+      .update(otp)
+      .digest("hex");
+
+    // 🔥 Save hashed OTP + expiry (MATCH FIELD NAME)
+    user.emailOtp = hashedOtp;
+    user.emailOtpExpiry = Date.now() + 10 * 60 * 1000;
+
+    await user.save();
+
+    // 🔥 Send email with RAW OTP
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Resend OTP Verification",
+      html: `
+        <h2>Email Verification OTP</h2>
+        <p>Your new OTP is:</p>
+        <h1>${otp}</h1>
+        <p>This OTP will expire in 10 minutes.</p>
+      `,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP resent successfully",
+    });
+  } catch (error) {
+    console.log("Resend OTP Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error while resending OTP",
+    });
+  }
+};
+
+export const allUsersController = async (req, res) => {
+  try { 
+    const users = await UserModel.find({})
+     return res.status(200).send({ success: true, message: 'Users retrieved successfully', users });
+  } catch (error) {
+    return res.status(500).send({ success: false, message: 'Server error for getting users data', error: error.message });
+  }
+}
+
+export const getAllUsersWithPatients = async (req, res) => {
+  try {
+
+        const users = await UserModel.aggregate([
+            {
+                $lookup: {
+                    from: "patients", // collection name (IMPORTANT)
+                    localField: "_id",
+                    foreignField: "createdBy",
+                    as: "patients"
+                }
+            },
+            {
+                $project: {
+                    password: 0,
+                    emailOtp: 0,
+                    emailOtpExpiry: 0,
+                    resetPasswordOtp: 0,
+                    resetPasswordExpiry: 0,
+                    refreshToken: 0
+                }
+            }
+        ]);
+
+        return res.status(200).json({
+            success: true,
+            message: "Users with patients fetched successfully",
+            users
+        });
+
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            success: false,
+            message: "Error fetching users with patients"
+        });
+    }
+}
