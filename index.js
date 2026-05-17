@@ -14,7 +14,15 @@ const app = express();
 
 connectDB();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://patient-info.yraviprakash.com",
+    ],
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 app.get('/', (req, res) => {
